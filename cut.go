@@ -10,30 +10,6 @@ import (
 	"syscall"
 )
 
-type cpu struct {
-	name    string
-	user    int
-	nice    int
-	system  int
-	idle    int
-	iowait  int
-	irg     int
-	softirq int
-}
-
-type calcData struct {
-	total       int
-	prevTotal   int
-	idle        int
-	prevIdle    int
-	nonIdle     int
-	prevNonIdle int
-}
-
-func convert(s string) int {
-	value, _ := strconv.Atoi(s)
-	return value
-}
 func main() {
 
 	sig := make(chan os.Signal, 1)
@@ -43,12 +19,6 @@ func main() {
 	trimProc := strings.TrimSuffix(string(procNum), "\n")
 	cores, _ := strconv.Atoi(trimProc)
 	cores++ // first core is a sum of all cores
-	timez := make(chan int, 1)
-	var chanList []*chan int
-
-	chanList = append(chanList, &timez)
-	go watch(chanList, &sig)
-	timez <- 1
 
 	dataChan := make(chan []string, 1)
 	go reader(dataChan)
@@ -67,7 +37,8 @@ out:
 			fmt.Printf("Average Cpu Usage: %.2f %% \n", data)
 
 		case procUsage := <-procUsageChan:
-			fmt.Printf(" Proccess: %s Usage: %.2f%% PID: %s \n", procUsage.name, procUsage.usage, procUsage.pid)
+			fmt.Printf(" Proccess: %s Usage: %.2f%% PID: %s \n",
+				procUsage.name, procUsage.usage, procUsage.pid)
 
 		}
 	}

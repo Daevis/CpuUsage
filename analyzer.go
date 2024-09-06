@@ -1,6 +1,7 @@
 package main
 
 import (
+	"strconv"
 	"strings"
 	"time"
 )
@@ -15,7 +16,8 @@ func analyzer(dataChan chan []string, cores int, result chan float64) {
 		avCpu := 0.0
 		for i := range cores {
 			trimmed := strings.Split(data[i], " ")
-			cpu := cpu{trimmed[0],
+			cpu := cpu{
+				trimmed[0],
 				convert(trimmed[1]),
 				convert(trimmed[2]),
 				convert(trimmed[3]),
@@ -58,5 +60,47 @@ func analyzer(dataChan chan []string, cores int, result chan float64) {
 		avCpu /= float64(cores - 1)
 		result <- avCpu
 		time.Sleep(1 * time.Second)
+	}
+}
+
+func getPIDUsage() func(PID string) (float64, string, error) {
+	hashMap := make(map[string]*prevData)
+	var hertz float64 = getCpuHz()
+
+	return func(PID string) (float64, string, error) {
+		if _, ok := hashMap[PID]; !ok {
+			hashMap[PID] = &prevData{0.0, 0.0}
+		}
+		line, err := readProcUsage(PID)
+		if err != nil {
+			return 0, "", err
+		}
+		temp := string(line)
+		splitted := strings.Split(temp, " ")
+		utime, _ := strconv.Atoi(splitted[15])
+		stime, _ := strconv.Atoi(splitted[16])
+		cutime, _ := strconv.Atoi(splitted[17])
+		cstime, _ := strconv.Atoi(splitted[18])
+		totalTime := float64(utime + stime + cutime + cstime)
+		uptime := readUptime()
+		elapesedTime := (uptime - hashMap[PID].prevUptime)
+		cpuCurretn := 100 * (((totalTime - hashMap[PID].prevTotaltime) / hertz) / elapesedTime)
+
+		// Pass true for more info about proccess cmdline
+		pidName, _ := readProcCmdline(PID, false)
+		/*
+			for i := 1; i < 10; i++ {
+				if strings.Contains(splitted[i], ")") {
+					pidName += splitted[i]
+					break
+				}
+				pidName += splitted[i] + " "
+
+			}
+		*/
+		hashMap[PID].prevTotaltime = totalTime
+		hashMap[PID].prevUptime = uptime
+		pidName = strings.Trim(pidName, "()")
+		return cpuCurretn, pidName, nil
 	}
 }
